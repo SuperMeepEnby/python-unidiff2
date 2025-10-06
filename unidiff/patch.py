@@ -25,9 +25,8 @@
 """Classes used by the unified diff parser to keep the diff data."""
 
 from __future__ import unicode_literals
-
-import codecs
-import sys
+from io import StringIO
+from typing import Iterable, List, Optional, Union, Self
 
 from unidiff.constants import (
     DEFAULT_ENCODING,
@@ -55,34 +54,23 @@ from unidiff.constants import (
 from unidiff.errors import UnidiffParseError
 
 
-PY2 = sys.version_info[0] == 2
-if PY2:
-    import io
-    from StringIO import StringIO
-    open_file = io.open
-    make_str = lambda x: x.encode(DEFAULT_ENCODING)
-
-    def implements_to_string(cls):
-        cls.__unicode__ = cls.__str__
-        cls.__str__ = lambda x: x.__unicode__().encode(DEFAULT_ENCODING)
-        return cls
-else:
-    from io import StringIO
-    from typing import Iterable, Optional, Union
-    open_file = open
-    make_str = str
-    implements_to_string = lambda x: x
-    unicode = str
-    basestring = str
+open_file = open
+make_str = str
+unicode = str
+basestring = str
 
 
-@implements_to_string
 class Line(object):
     """A diff line."""
 
-    def __init__(self, value, line_type,
-                 source_line_no=None, target_line_no=None, diff_line_no=None):
-        # type: (str, str, Optional[int], Optional[int], Optional[int]) -> None
+    def __init__(
+        self,
+        value: str,
+        line_type: str,
+        source_line_no: Optional[int] = None,
+        target_line_no: Optional[int] = None,
+        diff_line_no: Optional[int] = None,
+    ) -> None:
         super(Line, self).__init__()
         self.source_line_no = source_line_no
         self.target_line_no = target_line_no
@@ -90,16 +78,13 @@ class Line(object):
         self.line_type = line_type
         self.value = value
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         return make_str("<Line: %s%s>") % (self.line_type, self.value)
 
-    def __str__(self):
-        # type: () -> str
+    def __str__(self) -> str:
         return "%s%s" % (self.line_type, self.value)
 
-    def __eq__(self, other):
-        # type: (Line) -> bool
+    def __eq__(self, other) -> bool:
         return (self.source_line_no == other.source_line_no and
                 self.target_line_no == other.target_line_no and
                 self.diff_line_no == other.diff_line_no and
@@ -107,22 +92,18 @@ class Line(object):
                 self.value == other.value)
 
     @property
-    def is_added(self):
-        # type: () -> bool
+    def is_added(self) -> bool:
         return self.line_type == LINE_TYPE_ADDED
 
     @property
-    def is_removed(self):
-        # type: () -> bool
+    def is_removed(self) -> bool:
         return self.line_type == LINE_TYPE_REMOVED
 
     @property
-    def is_context(self):
-        # type: () -> bool
+    def is_context(self) -> bool:
         return self.line_type == LINE_TYPE_CONTEXT
 
 
-@implements_to_string
 class PatchInfo(list):
     """Lines with extended patch info.
 
@@ -131,23 +112,25 @@ class PatchInfo(list):
 
     """
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         value = "<PatchInfo: %s>" % self[0].strip()
         return make_str(value)
 
-    def __str__(self):
-        # type: () -> str
+    def __str__(self) -> str:
         return ''.join(unicode(line) for line in self)
 
 
-@implements_to_string
 class Hunk(list):
     """Each of the modified blocks of a file."""
 
-    def __init__(self, src_start=0, src_len=0, tgt_start=0, tgt_len=0,
-                 section_header=''):
-        # type: (int, int, int, int, str) -> None
+    def __init__(
+        self,
+        src_start: int = 0,
+        src_len: int = 0,
+        tgt_start: int = 0,
+        tgt_len: int = 0,
+        section_header: str = ''
+    ) -> None:
         super(Hunk, self).__init__()
         if src_len is None:
             src_len = 1
@@ -158,11 +141,10 @@ class Hunk(list):
         self.target_start = int(tgt_start)
         self.target_length = int(tgt_len)
         self.section_header = section_header
-        self._added = None  # Optional[int]
-        self._removed = None  # Optional[int]
+        self._added: Optional[int] = None
+        self._removed: Optional[int] = None
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         value = "<Hunk: @@ %d,%d %d,%d @@ %s>" % (self.source_start,
                                                   self.source_length,
                                                   self.target_start,
@@ -170,8 +152,7 @@ class Hunk(list):
                                                   self.section_header)
         return make_str(value)
 
-    def __str__(self):
-        # type: () -> str
+    def __str__(self) -> str:
         # section header is optional and thus we output it only if it's present
         head = "@@ -%d,%d +%d,%d @@%s\n" % (
             self.source_start, self.source_length,
@@ -180,8 +161,7 @@ class Hunk(list):
         content = ''.join(unicode(line) for line in self)
         return head + content
 
-    def append(self, line):
-        # type: (Line) -> None
+    def append(self, line: Line) -> None:
         """Append the line to hunk, and keep track of source/target lines."""
         # Make sure the line is encoded correctly. This is a no-op except for
         # potentially raising a UnicodeDecodeError.
@@ -189,8 +169,7 @@ class Hunk(list):
         super(Hunk, self).append(line)
 
     @property
-    def added(self):
-        # type: () -> Optional[int]
+    def added(self) -> Optional[int]:
         if self._added is not None:
             return self._added
         # re-calculate each time to allow for hunk modifications
@@ -198,48 +177,47 @@ class Hunk(list):
         return sum(1 for line in self if line.is_added)
 
     @property
-    def removed(self):
-        # type: () -> Optional[int]
+    def removed(self) -> Optional[int]:
         if self._removed is not None:
             return self._removed
         # re-calculate each time to allow for hunk modifications
         # (which should mean metadata_only switch wasn't used)
         return sum(1 for line in self if line.is_removed)
 
-    def is_valid(self):
-        # type: () -> bool
+    def is_valid(self) -> bool:
         """Check hunk header data matches entered lines info."""
         return (len(self.source) == self.source_length and
                 len(self.target) == self.target_length)
 
-    def source_lines(self):
-        # type: () -> Iterable[Line]
+    def source_lines(self) -> Iterable[Line]:
         """Hunk lines from source file (generator)."""
-        return (l for l in self if l.is_context or l.is_removed)
+        return (line for line in self if line.is_context or line.is_removed)
 
     @property
-    def source(self):
-        # type: () -> Iterable[str]
-        return [str(l) for l in self.source_lines()]
+    def source(self) -> Iterable[str]:
+        return [str(line) for line in self.source_lines()]
 
-    def target_lines(self):
-        # type: () -> Iterable[Line]
+    def target_lines(self) -> Iterable[Line]:
         """Hunk lines from target file (generator)."""
-        return (l for l in self if l.is_context or l.is_added)
+        return (line for line in self if line.is_context or line.is_added)
 
     @property
-    def target(self):
-        # type: () -> Iterable[str]
-        return [str(l) for l in self.target_lines()]
+    def target(self) -> Iterable[str]:
+        return [str(line) for line in self.target_lines()]
 
 
 class PatchedFile(list):
     """Patch updated file, it is a list of Hunks."""
 
-    def __init__(self, patch_info=None, source='', target='',
-                 source_timestamp=None, target_timestamp=None,
-                 is_binary_file=False):
-        # type: (Optional[PatchInfo], str, str, Optional[str], Optional[str], bool, bool) -> None
+    def __init__(
+        self,
+        patch_info: Optional[PatchInfo] = None,
+        source: str = '',
+        target: str = '',
+        source_timestamp: Optional[str] = None,
+        target_timestamp: Optional[str] = None,
+        is_binary_file: bool = False,
+    ) -> None:
         super(PatchedFile, self).__init__()
         self.patch_info = patch_info
         self.source_file = source
@@ -248,12 +226,10 @@ class PatchedFile(list):
         self.target_timestamp = target_timestamp
         self.is_binary_file = is_binary_file
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         return make_str("<PatchedFile: %s>") % make_str(self.path)
 
-    def __str__(self):
-        # type: () -> str
+    def __str__(self) -> str:
         source = ''
         target = ''
         # patch info is optional
@@ -268,8 +244,13 @@ class PatchedFile(list):
         hunks = ''.join(unicode(hunk) for hunk in self)
         return info + source + target + hunks
 
-    def _parse_hunk(self, header, diff, encoding, metadata_only):
-        # type: (str, enumerate[str], Optional[str], bool) -> None
+    def _parse_hunk(
+        self,
+        header: str,
+        diff: enumerate[str],
+        encoding: Optional[str],
+        metadata_only: bool,
+    ) -> None:
         """Parse hunk details."""
         header_info = RE_HUNK_HEADER.match(header)
         hunk_info = header_info.groups()
@@ -368,8 +349,7 @@ class PatchedFile(list):
 
         self.append(hunk)
 
-    def _add_no_newline_marker_to_last_hunk(self):
-        # type: () -> None
+    def _add_no_newline_marker_to_last_hunk(self) -> None:
         if not self:
             raise UnidiffParseError(
                 'Unexpected marker:' + LINE_VALUE_NO_NEWLINE)
@@ -377,16 +357,14 @@ class PatchedFile(list):
         last_hunk.append(
             Line(LINE_VALUE_NO_NEWLINE + '\n', line_type=LINE_TYPE_NO_NEWLINE))
 
-    def _append_trailing_empty_line(self):
-        # type: () -> None
+    def _append_trailing_empty_line(self) -> None:
         if not self:
             raise UnidiffParseError('Unexpected trailing newline character')
         last_hunk = self[-1]
         last_hunk.append(Line('\n', line_type=LINE_TYPE_EMPTY))
 
     @property
-    def path(self):
-        # type: () -> str
+    def path(self) -> str:
         """Return the file path abstracted from VCS."""
         filepath = self.source_file
         if filepath in (None, DEV_NULL) or (
@@ -407,26 +385,23 @@ class PatchedFile(list):
         return filepath
 
     @property
-    def added(self):
-        # type: () -> int
+    def added(self) -> int:
         """Return the file total added lines."""
         return sum([hunk.added for hunk in self])
 
     @property
-    def removed(self):
-        # type: () -> int
+    def removed(self) -> int:
         """Return the file total removed lines."""
         return sum([hunk.removed for hunk in self])
 
     @property
-    def is_rename(self):
+    def is_rename(self) -> bool:
         return (self.source_file != DEV_NULL
             and self.target_file != DEV_NULL
             and self.source_file[2:] != self.target_file[2:])
 
     @property
-    def is_added_file(self):
-        # type: () -> bool
+    def is_added_file(self) -> bool:
         """Return True if this patch adds the file."""
         if self.source_file == DEV_NULL:
             return True
@@ -434,8 +409,7 @@ class PatchedFile(list):
                 self[0].source_length == 0)
 
     @property
-    def is_removed_file(self):
-        # type: () -> bool
+    def is_removed_file(self) -> bool:
         """Return True if this patch removes the file."""
         if self.target_file == DEV_NULL:
             return True
@@ -443,18 +417,20 @@ class PatchedFile(list):
                 self[0].target_length == 0)
 
     @property
-    def is_modified_file(self):
-        # type: () -> bool
+    def is_modified_file(self) -> bool:
         """Return True if this patch modifies the file."""
         return not (self.is_added_file or self.is_removed_file)
 
 
-@implements_to_string
 class PatchSet(list):
     """A list of PatchedFiles."""
 
-    def __init__(self, f, encoding=None, metadata_only=False):
-        # type: (Union[StringIO, str], Optional[str], bool) -> None
+    def __init__(
+        self,
+        f: Union[StringIO, str],
+        encoding: Optional[str] = None,
+        metadata_only: bool = False
+    ) -> None:
         super(PatchSet, self).__init__()
 
         # convert string inputs to StringIO objects
@@ -469,16 +445,18 @@ class PatchSet(list):
         # it will still validate the diff metadata consistency and get counts
         self._parse(data, encoding=encoding, metadata_only=metadata_only)
 
-    def __repr__(self):
-        # type: () -> str
+    def __repr__(self) -> str:
         return make_str('<PatchSet: %s>') % super(PatchSet, self).__repr__()
 
-    def __str__(self):
-        # type: () -> str
+    def __str__(self) -> str:
         return ''.join(unicode(patched_file) for patched_file in self)
 
-    def _parse(self, diff, encoding, metadata_only):
-        # type: (StringIO, Optional[str], bool) -> None
+    def _parse(
+        self,
+        diff: StringIO,
+        encoding: Optional[str],
+        metadata_only: bool,
+    ) -> None:
         current_file = None
         patch_info = None
 
@@ -602,53 +580,60 @@ class PatchSet(list):
             patch_info.append(line)
 
     @classmethod
-    def from_filename(cls, filename, encoding=DEFAULT_ENCODING, errors=None, newline=None):
-        # type: (str, str, Optional[str]) -> PatchSet
+    def from_filename(
+        cls,
+        filename: str,
+        encoding: str = DEFAULT_ENCODING,
+        errors: Optional[str] = None,
+        newline: Optional[str] = None,
+    ) -> Self:
         """Return a PatchSet instance given a diff filename."""
         with open_file(filename, 'r', encoding=encoding, errors=errors, newline=newline) as f:
             instance = cls(f)
         return instance
 
     @staticmethod
-    def _convert_string(data, encoding=None, errors='strict'):
-        # type: (Union[str, bytes], str, str) -> StringIO
+    def _convert_string(
+        data: Union[str, bytes],
+        encoding: str = None,
+        errors: str = 'strict'
+    ):
         if encoding is not None:
             # if encoding is given, assume bytes and decode
             data = unicode(data, encoding=encoding, errors=errors)
         return StringIO(data)
 
     @classmethod
-    def from_string(cls, data, encoding=None, errors='strict'):
-        # type: (str, str, Optional[str]) -> PatchSet
+    def from_string(
+        cls,
+        data: str,
+        encoding: str = None,
+        errors: Optional[str] = 'strict',
+    ) -> Self:
         """Return a PatchSet instance given a diff string."""
         return cls(cls._convert_string(data, encoding, errors))
 
     @property
-    def added_files(self):
-        # type: () -> list[PatchedFile]
+    def added_files(self) -> List[PatchedFile]:
         """Return patch added files as a list."""
         return [f for f in self if f.is_added_file]
 
     @property
-    def removed_files(self):
-        # type: () -> list[PatchedFile]
+    def removed_files(self) -> List[PatchedFile]:
         """Return patch removed files as a list."""
         return [f for f in self if f.is_removed_file]
 
     @property
-    def modified_files(self):
-        # type: () -> list[PatchedFile]
+    def modified_files(self) -> List[PatchedFile]:
         """Return patch modified files as a list."""
         return [f for f in self if f.is_modified_file]
 
     @property
-    def added(self):
-        # type: () -> int
+    def added(self) -> int:
         """Return the patch total added lines."""
         return sum([f.added for f in self])
 
     @property
-    def removed(self):
-        # type: () -> int
+    def removed(self) -> int:
         """Return the patch total removed lines."""
         return sum([f.removed for f in self])

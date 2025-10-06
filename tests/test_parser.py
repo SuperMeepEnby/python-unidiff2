@@ -31,11 +31,10 @@ import os.path
 import unittest
 
 from unidiff import PatchSet
-from unidiff.patch import PY2
 from unidiff.errors import UnidiffParseError
 
-if not PY2:
-    unicode = str
+unicode = str
+
 
 class TestUnidiffParser(unittest.TestCase):
     """Tests for Unified Diff Parser."""
@@ -52,11 +51,7 @@ class TestUnidiffParser(unittest.TestCase):
         utf8_file = os.path.join(self.samples_dir, 'samples/sample3.diff')
         # read bytes
         with open(utf8_file, 'rb') as diff_file:
-            if PY2:
-                self.assertRaises(UnicodeDecodeError, PatchSet, diff_file)
-            else:
-                # unicode expected
-                self.assertRaises(TypeError, PatchSet, diff_file)
+            self.assertRaises(TypeError, PatchSet, diff_file)
 
     def test_encoding_param(self):
         utf8_file = os.path.join(self.samples_dir, 'samples/sample3.diff')
