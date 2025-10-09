@@ -1,0 +1,25 @@
+name: Lint and type check
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint-and-type-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.11'
+
+    - name: Install flake8 and mypy
+      run: pip install flake8 mypy
+
+    - name: Run flake8
+      run: flake8 .
+
+    - name: Run mypy
+      run: mypy .

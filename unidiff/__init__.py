@@ -26,7 +26,6 @@
 
 from __future__ import unicode_literals
 
-from unidiff import __version__
 from unidiff.patch import (
     DEFAULT_ENCODING,
     LINE_TYPE_ADDED,
@@ -38,4 +37,3 @@ from unidiff.patch import (
     UnidiffParseError,
 )
 
-VERSION = __version__.__version__
