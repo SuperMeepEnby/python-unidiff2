@@ -101,6 +101,11 @@ class Line(object):
     def is_context(self) -> bool:
         return self.line_type == LINE_TYPE_CONTEXT
 
+    def prepend_line_number(self) -> str:
+        if self.target_line_no or self.source_line_no:
+            return "%d %s%s" % (self.target_line_no or self.source_line_no, self.line_type, self.value)
+        return str(self)
+
 
 class PatchInfo(list):
     """Lines with extended patch info.
@@ -151,13 +156,19 @@ class Hunk(list):
         return str(value)
 
     def __str__(self) -> str:
+        content = ''.join(str(line) for line in self)
+        return self.head + content
+
+    @property
+    def head(self) -> str:
         # section header is optional and thus we output it only if it's present
-        head = "@@ -%d,%d +%d,%d @@%s\n" % (
+        return "@@ -%d,%d +%d,%d @@%s\n" % (
             self.source_start, self.source_length,
             self.target_start, self.target_length,
             ' ' + self.section_header if self.section_header else '')
-        content = ''.join(str(line) for line in self)
-        return head + content
+
+    def prepend_line_number(self) -> str:
+        return self.head + ''.join(line.prepend_line_number() for line in self[:self.target_length])
 
     def append(self, line: Line) -> None:
         """Append the line to hunk, and keep track of source/target lines."""
@@ -215,6 +226,7 @@ class PatchedFile(list):
         source_timestamp: Optional[str] = None,
         target_timestamp: Optional[str] = None,
         is_binary_file: bool = False,
+        prepend_line_number: bool = False
     ) -> None:
         super(PatchedFile, self).__init__()
         self.patch_info = patch_info
@@ -223,6 +235,7 @@ class PatchedFile(list):
         self.target_file = target
         self.target_timestamp = target_timestamp
         self.is_binary_file = is_binary_file
+        self.prepend_line_number = prepend_line_number
 
     def __repr__(self) -> str:
         return str("<PatchedFile: %s>") % str(self.path)
@@ -239,7 +252,7 @@ class PatchedFile(list):
             target = "+++ %s%s\n" % (
                 self.target_file,
                 '\t' + self.target_timestamp if self.target_timestamp else '')
-        hunks = ''.join(str(hunk) for hunk in self)
+        hunks = ''.join(hunk.prepend_line_number() if self.prepend_line_number else str(hunk) for hunk in self)
         return info + source + target + hunks
 
     def _parse_hunk(
@@ -435,7 +448,8 @@ class PatchSet(list):
         self,
         f: Union[StringIO, str],
         encoding: Optional[str] = None,
-        metadata_only: bool = False
+        metadata_only: bool = False,
+        prepend_line_number: bool = False
     ) -> None:
         super(PatchSet, self).__init__()
 
@@ -453,6 +467,7 @@ class PatchSet(list):
             data,  # type: ignore
             encoding=encoding,
             metadata_only=metadata_only,
+            prepend_line_number=prepend_line_number
         )
 
     def __repr__(self) -> str:
@@ -466,6 +481,7 @@ class PatchSet(list):
         diff: Iterator[str],
         encoding: Optional[str],
         metadata_only: bool,
+        prepend_line_number: bool,
     ) -> None:
         current_file = None
         patch_info = None
@@ -484,7 +500,7 @@ class PatchSet(list):
                 source_file = is_diff_git_header.group('source')
                 target_file = is_diff_git_header.group('target')
                 current_file = PatchedFile(
-                    patch_info, source_file, target_file, None, None)
+                    patch_info, source_file, target_file, None, None, prepend_line_number=prepend_line_number)
                 self.append(current_file)
                 patch_info.append(line)
                 continue
